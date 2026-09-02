@@ -9,6 +9,6 @@
     <AssemblyName>EBV Scan</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>AppIcon.ico</ApplicationIcon>
-    <Version>1.5.3</Version>
+    <Version>1.6.0</Version>
   </PropertyGroup>
 </Project>
