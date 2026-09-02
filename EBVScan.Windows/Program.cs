@@ -14,6 +14,7 @@ namespace EBVScan.Windows;
 record Limit(string Name, string Unit, double?[] Values, double? Minimum = null);
 record MaterialTable(string Title, string[] Classes, List<Limit> Limits);
 record Reading(string Name, string Unit, string[] Texts, double?[] Values, bool[] Ignored);
+record DepVLimit(double? Minimum, double Maximum, string Display, bool Orientation = false);
 
 static class EBVData
 {
@@ -23,7 +24,7 @@ static class EBVData
         "Cyanide|mg/kg","EOX|mg/kg","MKW C10-C40|mg/kg","MKW C10-C22|mg/kg","Σ PCB 7|mg/kg","Naphthalin|mg/kg","Acenaphthylen|mg/kg","Acenaphthen|mg/kg",
         "Fluoren|mg/kg","Phenanthren|mg/kg","Anthracen|mg/kg","Fluoranthen|mg/kg","Pyren|mg/kg","Benzo(a)anthracen|mg/kg","Chrysen|mg/kg",
         "Benzo(b)fluoranthen|mg/kg","Benzo(k)fluoranthen|mg/kg","Benzo(a)pyren|mg/kg","Dibenz(a,h)anthracen|mg/kg","Benzo(g,h,i)perylen|mg/kg","Indeno(1,2,3-c,d)pyren|mg/kg",
-        "Messtemperatur pH-Wert|°C","Cyanide|mg/l","Antimon|µg/l","Arsen|µg/l","Blei|µg/l","Cadmium|µg/l","Chrom gesamt|µg/l","Kupfer|µg/l",
+        "Messtemperatur pH-Wert|°C","Glühverlust|M%","BTEX|mg/kg","DOC|mg/l","Chlorid|mg/l","Fluorid|mg/l","Barium|mg/l","Selen|µg/l","Gesamtgehalt an gelösten Feststoffen|mg/l","Extrahierbare lipophile Stoffe|M%","Cyanide|mg/l","Antimon|µg/l","Arsen|µg/l","Blei|µg/l","Cadmium|µg/l","Chrom gesamt|µg/l","Kupfer|µg/l",
         "Molybdän|µg/l","Nickel|µg/l","Quecksilber|µg/l","Thallium|µg/l","Vanadium|µg/l","Zink|µg/l","Phenole|µg/l"
     }.Select(x => { var p=x.Split('|'); return new Limit(p[0],p[1],N(count)); });
 
@@ -61,7 +62,7 @@ static class Analyzer
         ["Elektrische Leitfähigkeit"]=new[]{"el. leitfähigkeit","el leitfähigkeit","leitfähigkeit","leitfaehigkeit"},["Chrom gesamt"]=new[]{"chrom, ges","chrom ges","chrom gesamt","chrom (ges.)"},
         ["PAK 15"]=new[]{"σ pak15","∑ pak15","pak 15","pak15"},["PAK 16"]=new[]{"σ pak (epa)","∑ pak (epa)","pak (epa)","pak 16","pak16"},
         ["Σ PCB 7"]=new[]{"σ pcb 7","∑ pcb 7","pcb 7","pcb7"},["MKW C10-C22"]=new[]{"mkw (c10-c22)","mkw c10-c22"},["MKW C10-C40"]=new[]{"mkw (c10-c40)","mkw c10-c40"},
-        ["Cyanide"]=new[]{"cyanide (ges.)","cyanide ges","cyanide"},["Phenole"]=new[]{"σ phenole","∑ phenole","phenole","phenol"},["Dibenz(a,h)anthracen"]=new[]{"dibenz(a,h)anthr.","dibenz(a,h)anthracen"},["Indeno(1,2,3-c,d)pyren"]=new[]{"indeno(1,2,3,c,d)pyren","indeno(1,2,3-c,d)pyren"}
+        ["Cyanide"]=new[]{"cyanid, leicht freisetzbar","cyanid leicht freisetzbar","cyanide (ges.)","cyanide ges","cyanide","cyanid"},["Phenole"]=new[]{"σ phenole","∑ phenole","phenole","phenol"},["Dibenz(a,h)anthracen"]=new[]{"dibenz(a,h)anthr.","dibenz(a,h)anthracen"},["Indeno(1,2,3-c,d)pyren"]=new[]{"indeno(1,2,3,c,d)pyren","indeno(1,2,3-c,d)pyren"}
     };
     static string Norm(string s)=>s.ToLowerInvariant().Replace("ä","a").Replace("ö","o").Replace("ü","u").Replace("gesamt","ges").Replace(".","");
     public static List<Reading> Parse(string text,MaterialTable table){
@@ -86,12 +87,34 @@ static class Analyzer
     public static string Overall(List<Reading> rs,int sample,MaterialTable t){var relevant=rs.Where(r=>r.Values[sample]!=null&&!r.Ignored[sample]&&r.Name!="pH-Wert"&&r.Name!="Elektrische Leitfähigkeit").ToList();if(relevant.Count==0)return "Keine Werte";for(int i=0;i<t.Classes.Length;i++)if(relevant.All(r=>{var l=t.Limits.First(x=>x.Name==r.Name&&x.Unit==r.Unit);return l.Values[i] is not double max||r.Values[sample]<=max;}))return t.Classes[i];return "> "+t.Classes[^1];}
 }
 
+static class DepVSpalte5
+{
+    static readonly Dictionary<string,DepVLimit> Values=new(){
+        ["pH-Wert|"]=new(5.5,13,"5,5–13",true),
+        ["Glühverlust|M%"]=new(null,3,"≤ 3"),["TOC|M%"]=new(null,1,"≤ 1"),["BTEX|mg/kg"]=new(null,6,"≤ 6"),["Σ PCB 7|mg/kg"]=new(null,1,"≤ 1"),
+        ["MKW C10-C40|mg/kg"]=new(null,500,"≤ 500"),["PAK 16|mg/kg"]=new(null,30,"≤ 30"),
+        ["Extrahierbare lipophile Stoffe|M%"]=new(null,.1,"≤ 0,1"),
+        ["DOC|mg/l"]=new(null,50,"≤ 50"),["Phenole|µg/l"]=new(null,100,"≤ 100"),
+        ["Arsen|µg/l"]=new(null,50,"≤ 50"),["Blei|µg/l"]=new(null,50,"≤ 50"),["Cadmium|µg/l"]=new(null,4,"≤ 4"),
+        ["Kupfer|µg/l"]=new(null,200,"≤ 200"),["Nickel|µg/l"]=new(null,40,"≤ 40"),["Quecksilber|µg/l"]=new(null,1,"≤ 1"),["Zink|µg/l"]=new(null,400,"≤ 400"),
+        ["Chlorid|mg/l"]=new(null,80,"≤ 80"),["Sulfat|mg/l"]=new(null,100,"≤ 100¹"),["Cyanide|mg/l"]=new(null,.01,"≤ 0,01²"),
+        ["Fluorid|mg/l"]=new(null,1,"≤ 1"),["Barium|mg/l"]=new(null,2,"≤ 2"),["Chrom gesamt|µg/l"]=new(null,50,"≤ 50"),
+        ["Molybdän|µg/l"]=new(null,50,"≤ 50"),["Antimon|µg/l"]=new(null,6,"≤ 6³"),["Selen|µg/l"]=new(null,10,"≤ 10"),
+        ["Gesamtgehalt an gelösten Feststoffen|mg/l"]=new(null,400,"≤ 400")
+    };
+    public static DepVLimit? Limit(Reading r)=>Values.GetValueOrDefault(r.Name+"|"+r.Unit);
+    public static string LimitText(Reading r)=>Limit(r)?.Display??"–";
+    public static string Result(Reading r,int sample){if(r.Ignored[sample])return "ignoriert";if(r.Values[sample] is not double value||Limit(r) is not DepVLimit limit)return "–";var fits=value<=limit.Maximum&&(limit.Minimum is null||value>=limit.Minimum);if(limit.Orientation)return fits?"im Bereich":"Ursache prüfen";return fits?"eingehalten":"überschritten";}
+    public static string Overall(List<Reading> readings,int sample){var comparable=readings.Where(r=>!r.Ignored[sample]&&r.Values[sample]!=null&&Limit(r) is {Orientation:false}).ToList();if(comparable.Count==0)return "Spalte 5: keine Werte";return comparable.All(r=>Result(r,sample)=="eingehalten")?"Spalte 5 eingehalten":"Spalte 5 überschritten";}
+    public static string Drivers(List<Reading> readings,int sample){var matches=readings.Where(r=>Result(r,sample)=="überschritten").Take(4).Select(r=>$"{r.Name} {r.Texts[sample]}{(r.Unit.Length==0?"":" "+r.Unit)}").ToArray();return matches.Length==0?"":"DepV überschritten: "+string.Join(", ",matches);}
+}
+
 class MainForm:Form
 {
     readonly ComboBox material=new(){DropDownStyle=ComboBoxStyle.DropDownList,Width=180};readonly Button open=new(){Text="PDF auswählen",AutoSize=true};readonly Button reset=new(){Text="Nächste Bewertung",AutoSize=true,Enabled=false};readonly Button print=new(){Text="Drucken",AutoSize=true,Enabled=false};
     readonly Label status=new(){AutoSize=true,Text="PDF auswählen oder hier ablegen",Padding=new(8)};readonly Label result=new(){AutoSize=true,Font=new Font("Segoe UI",12,FontStyle.Bold),Padding=new(8)};readonly DataGridView grid=new(){Dock=DockStyle.Fill,AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill,AllowUserToAddRows=false,ReadOnly=true};
     List<Reading> readings=new();string fileName="";
-    public MainForm(){Text="EBV Scan 1.5.3";Width=1180;Height=760;AllowDrop=true;material.Items.AddRange(EBVData.Tables.Keys.ToArray());material.SelectedItem="Boden";
+    public MainForm(){Text="EBV Scan 1.6.0";Width=1280;Height=780;AllowDrop=true;material.Items.AddRange(EBVData.Tables.Keys.ToArray());material.SelectedItem="Boden";
         var top=new FlowLayoutPanel{Dock=DockStyle.Top,Height=52,Padding=new(8)};top.Controls.AddRange(new Control[]{new Label{Text="Material:",AutoSize=true,Padding=new(4,8,0,0)},material,open,reset,print,status});Controls.Add(grid);Controls.Add(result);result.Dock=DockStyle.Top;Controls.Add(top);
         open.Click+=async(_,_)=>{using var d=new OpenFileDialog{Filter="PDF-Dateien|*.pdf"};if(d.ShowDialog()==DialogResult.OK)await LoadPdf(d.FileName);};reset.Click+=(_,_)=>ResetEvaluation();print.Click+=(_,_)=>PrintReport();material.SelectedIndexChanged+=(_,_)=>{if(readings.Count>0)RefreshGrid();};DragEnter+=(_,e)=>{if(e.Data?.GetDataPresent(DataFormats.FileDrop)==true)e.Effect=DragDropEffects.Copy;};DragDrop+=async(_,e)=>{if(e.Data?.GetData(DataFormats.FileDrop) is string[] f&&f.Length>0&&Path.GetExtension(f[0]).Equals(".pdf",StringComparison.OrdinalIgnoreCase))await LoadPdf(f[0]);};
     }
@@ -113,9 +136,9 @@ class MainForm:Form
         }
         if(string.IsNullOrWhiteSpace(sb.ToString()))throw new InvalidOperationException("Die PDF-Seiten konnten nicht per OCR gelesen werden.");return sb.ToString();
     }
-    void RefreshGrid(){var t=EBVData.Tables[(string)material.SelectedItem!];grid.Columns.Clear();grid.Rows.Clear();foreach(var c in new[]{"Parameter","MP 1","Klasse MP 1","MP 2","Klasse MP 2"}.Concat(t.Classes))grid.Columns.Add(c,c);foreach(var r in readings){var row=new List<string>{r.Name+(r.Unit.Length>0?" ["+r.Unit+"]":""),r.Texts[0],r.Name is "pH-Wert" or "Elektrische Leitfähigkeit"?"Orientierung":Analyzer.Stage(r,0,t),r.Texts[1],r.Name is "pH-Wert" or "Elektrische Leitfähigkeit"?"Orientierung":Analyzer.Stage(r,1,t)};row.AddRange(t.Classes.Select((_,i)=>t.Limits.First(x=>x.Name==r.Name&&x.Unit==r.Unit).Values[i]?.ToString("0.###",CultureInfo.GetCultureInfo("de-DE"))??"–"));grid.Rows.Add(row.ToArray());}result.Text=$"MP 1: {Analyzer.Overall(readings,0,t)}     MP 2: {Analyzer.Overall(readings,1,t)}";}
+    void RefreshGrid(){var t=EBVData.Tables[(string)material.SelectedItem!];grid.Columns.Clear();grid.Rows.Clear();foreach(var c in new[]{"Parameter","MP 1","EBV MP 1","DepV MP 1","MP 2","EBV MP 2","DepV MP 2"}.Concat(t.Classes).Append("DepV Sp. 5"))grid.Columns.Add(c,c);foreach(var r in readings){var row=new List<string>{r.Name+(r.Unit.Length>0?" ["+r.Unit+"]":""),r.Texts[0],r.Name is "pH-Wert" or "Elektrische Leitfähigkeit"?"Orientierung":Analyzer.Stage(r,0,t),DepVSpalte5.Result(r,0),r.Texts[1],r.Name is "pH-Wert" or "Elektrische Leitfähigkeit"?"Orientierung":Analyzer.Stage(r,1,t),DepVSpalte5.Result(r,1)};row.AddRange(t.Classes.Select((_,i)=>t.Limits.First(x=>x.Name==r.Name&&x.Unit==r.Unit).Values[i]?.ToString("0.###",CultureInfo.GetCultureInfo("de-DE"))??"–"));row.Add(DepVSpalte5.LimitText(r));grid.Rows.Add(row.ToArray());}result.Text=$"MP 1: EBV {Analyzer.Overall(readings,0,t)} · DepV {DepVSpalte5.Overall(readings,0)}     MP 2: EBV {Analyzer.Overall(readings,1,t)} · DepV {DepVSpalte5.Overall(readings,1)}";}
     void ResetEvaluation(){readings.Clear();fileName="";grid.Columns.Clear();grid.Rows.Clear();result.Text="";status.Text="PDF auswählen oder hier ablegen";reset.Enabled=print.Enabled=false;}
-    void PrintReport(){var doc=new PrintDocument{DocumentName="EBV Analyse"};doc.DefaultPageSettings.Landscape=true;doc.PrintPage+=(_,e)=>{var t=EBVData.Tables[(string)material.SelectedItem!];float y=40;e.Graphics!.DrawString("EBV Analyse – "+t.Title,new Font("Segoe UI",18,FontStyle.Bold),Brushes.Black,40,y);y+=38;e.Graphics.DrawString(fileName+"\nMP 1: "+Analyzer.Overall(readings,0,t)+"   MP 2: "+Analyzer.Overall(readings,1,t),new Font("Segoe UI",10),Brushes.Black,40,y);y+=48;foreach(var r in readings){e.Graphics.DrawString($"{r.Name} [{r.Unit}]   {r.Texts[0]} ({Analyzer.Stage(r,0,t)})   {r.Texts[1]} ({Analyzer.Stage(r,1,t)})",new Font("Segoe UI",8),Brushes.Black,40,y);y+=17;if(y>e.MarginBounds.Bottom){e.HasMorePages=true;return;}}};using var dlg=new PrintDialog{Document=doc};if(dlg.ShowDialog()==DialogResult.OK)doc.Print();}
+    void PrintReport(){var doc=new PrintDocument{DocumentName="EBV Analyse"};doc.DefaultPageSettings.Landscape=true;doc.PrintPage+=(_,e)=>{var t=EBVData.Tables[(string)material.SelectedItem!];float y=40;e.Graphics!.DrawString("EBV Analyse – "+t.Title,new Font("Segoe UI",18,FontStyle.Bold),Brushes.Black,40,y);y+=38;e.Graphics.DrawString(fileName+$"\nMP 1: EBV {Analyzer.Overall(readings,0,t)} · DepV {DepVSpalte5.Overall(readings,0)}   MP 2: EBV {Analyzer.Overall(readings,1,t)} · DepV {DepVSpalte5.Overall(readings,1)}",new Font("Segoe UI",10),Brushes.Black,40,y);y+=48;foreach(var r in readings){e.Graphics.DrawString($"{r.Name} [{r.Unit}]   MP 1 {r.Texts[0]}: EBV {Analyzer.Stage(r,0,t)}, DepV {DepVSpalte5.Result(r,0)}   MP 2 {r.Texts[1]}: EBV {Analyzer.Stage(r,1,t)}, DepV {DepVSpalte5.Result(r,1)}   DepV Sp. 5 {DepVSpalte5.LimitText(r)}",new Font("Segoe UI",8),Brushes.Black,40,y);y+=17;if(y>e.MarginBounds.Bottom){e.HasMorePages=true;return;}}e.Graphics.DrawString("DepV: Anhang 3 Nr. 2 Tabelle 2 Spalte 5 (DK 0). Fußnoten und behördliche Ausnahmen fachlich prüfen.",new Font("Segoe UI",7),Brushes.Black,40,y+8);};using var dlg=new PrintDialog{Document=doc};if(dlg.ShowDialog()==DialogResult.OK)doc.Print();}
 }
 
 static class Program
