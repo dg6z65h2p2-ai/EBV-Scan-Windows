@@ -57,7 +57,7 @@ static class EBVData
 static class Analyzer
 {
     static readonly Dictionary<string,string[]> Aliases=new(){
-        ["pH-Wert"]=new[]{"ph-wert","ph "},["Messtemperatur pH-Wert"]=new[]{"messtemperatur ph-wert","messtemperatur ph wert"},
+        ["pH-Wert"]=new[]{"ph-wert","ph "},["Messtemperatur pH-Wert"]=new[]{"messtemperatur ph-wert","messtemperatur ph wert","messtemperatur"},
         ["Elektrische Leitfähigkeit"]=new[]{"el. leitfähigkeit","el leitfähigkeit","leitfähigkeit","leitfaehigkeit"},["Chrom gesamt"]=new[]{"chrom, ges","chrom ges","chrom gesamt","chrom (ges.)"},
         ["PAK 15"]=new[]{"σ pak15","∑ pak15","pak 15","pak15"},["PAK 16"]=new[]{"σ pak (epa)","∑ pak (epa)","pak (epa)","pak 16","pak16"},
         ["Σ PCB 7"]=new[]{"σ pcb 7","∑ pcb 7","pcb 7","pcb7"},["MKW C10-C22"]=new[]{"mkw (c10-c22)","mkw c10-c22"},["MKW C10-C40"]=new[]{"mkw (c10-c40)","mkw c10-c40"},
@@ -69,7 +69,7 @@ static class Analyzer
         for(int index=0;index<lines.Length;index++){
             var raw=lines[index].Trim();var n=Norm(raw).Replace('μ','µ');
             if(n.StartsWith("eluat")){section="Eluat";unit="";continue;}if(n.StartsWith("feststoff")){section="Feststoff";unit="";continue;}
-            if(n.Contains("mg/kg")){unit="mg/kg";continue;}if(n.Contains("µg/l")||n.Contains("ug/l")){unit="µg/l";continue;}if(n.Contains("mg/l")){unit="mg/l";continue;}
+            if(n.Contains("mg/kg"))unit="mg/kg";else if(n.Contains("µg/l")||n.Contains("ug/l"))unit="µg/l";else if(n.Contains("mg/l"))unit="mg/l";
             var matches=table.Limits.Select(l=>(l,len:(Aliases.TryGetValue(l.Name,out var a)?a:new[]{l.Name}).Select(Norm).Where(n.Contains).Select(x=>x.Length).DefaultIfEmpty(0).Max())).Where(x=>x.len>0).OrderByDescending(x=>x.len).Select(x=>x.l).ToList();
             if(matches.Count==0)continue;var line=raw;if(!Regex.IsMatch(line,@"<\s*BG",RegexOptions.IgnoreCase)&&!Regex.IsMatch(line,@"\d" )&&index+1<lines.Length)line+="  "+lines[index+1];
             string lu=Norm(line).Replace('μ','µ');Limit? selected=matches.FirstOrDefault(l=>l.Unit.Length==0||lu.Contains(Norm(l.Unit))||unit==Norm(l.Unit)||(unit=="mg/l"&&l.Unit=="µg/l")||(unit=="µg/l"&&l.Unit=="mg/l"));
@@ -91,7 +91,7 @@ class MainForm:Form
     readonly ComboBox material=new(){DropDownStyle=ComboBoxStyle.DropDownList,Width=180};readonly Button open=new(){Text="PDF auswählen",AutoSize=true};readonly Button reset=new(){Text="Nächste Bewertung",AutoSize=true,Enabled=false};readonly Button print=new(){Text="Drucken",AutoSize=true,Enabled=false};
     readonly Label status=new(){AutoSize=true,Text="PDF auswählen oder hier ablegen",Padding=new(8)};readonly Label result=new(){AutoSize=true,Font=new Font("Segoe UI",12,FontStyle.Bold),Padding=new(8)};readonly DataGridView grid=new(){Dock=DockStyle.Fill,AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill,AllowUserToAddRows=false,ReadOnly=true};
     List<Reading> readings=new();string fileName="";
-    public MainForm(){Text="EBV Scan 1.5.1";Width=1180;Height=760;AllowDrop=true;material.Items.AddRange(EBVData.Tables.Keys.ToArray());material.SelectedItem="Boden";
+    public MainForm(){Text="EBV Scan 1.5.2";Width=1180;Height=760;AllowDrop=true;material.Items.AddRange(EBVData.Tables.Keys.ToArray());material.SelectedItem="Boden";
         var top=new FlowLayoutPanel{Dock=DockStyle.Top,Height=52,Padding=new(8)};top.Controls.AddRange(new Control[]{new Label{Text="Material:",AutoSize=true,Padding=new(4,8,0,0)},material,open,reset,print,status});Controls.Add(grid);Controls.Add(result);result.Dock=DockStyle.Top;Controls.Add(top);
         open.Click+=async(_,_)=>{using var d=new OpenFileDialog{Filter="PDF-Dateien|*.pdf"};if(d.ShowDialog()==DialogResult.OK)await LoadPdf(d.FileName);};reset.Click+=(_,_)=>ResetEvaluation();print.Click+=(_,_)=>PrintReport();material.SelectedIndexChanged+=(_,_)=>{if(readings.Count>0)RefreshGrid();};DragEnter+=(_,e)=>{if(e.Data?.GetDataPresent(DataFormats.FileDrop)==true)e.Effect=DragDropEffects.Copy;};DragDrop+=async(_,e)=>{if(e.Data?.GetData(DataFormats.FileDrop) is string[] f&&f.Length>0&&Path.GetExtension(f[0]).Equals(".pdf",StringComparison.OrdinalIgnoreCase))await LoadPdf(f[0]);};
     }
