@@ -20,18 +20,18 @@ jobs:
         run: dotnet publish EBVScan.Windows/EBVScan.Windows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
       - uses: actions/upload-artifact@v4
         with:
-          name: EBV-Scan-Windows-1.5.3
+          name: EBV-Scan-Windows-1.6.0
           path: publish/EBV Scan.exe
           if-no-files-found: error
       - name: ZIP-Datei für den Browser erstellen
         shell: pwsh
-        run: Compress-Archive -LiteralPath "publish/EBV Scan.exe" -DestinationPath "publish/EBV-Scan-Windows-1.5.3.zip" -Force
+        run: Compress-Archive -LiteralPath "publish/EBV Scan.exe" -DestinationPath "publish/EBV-Scan-Windows-1.6.0.zip" -Force
       - name: Öffentlichen Download veröffentlichen
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.5.3
-          name: EBV Scan Windows 1.5.3
-          body: Selbständige 64-Bit-Windows-Version mit PDF-OCR und EBV-Auswertung. Keine zusätzliche .NET-Installation erforderlich.
+          tag_name: v1.6.0
+          name: EBV Scan Windows 1.6.0
+          body: Selbständige 64-Bit-Windows-Version mit PDF-OCR, EBV-Auswertung und Gegenüberstellung zur aktuellen DepV Anhang 3 Tabelle 2 Spalte 5. Keine zusätzliche .NET-Installation erforderlich.
           files: |
             publish/EBV Scan.exe
-            publish/EBV-Scan-Windows-1.5.3.zip
+            publish/EBV-Scan-Windows-1.6.0.zip
