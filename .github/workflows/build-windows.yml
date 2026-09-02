@@ -1,0 +1,20 @@
+name: Windows EXE erstellen
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Einzelne Windows-EXE kompilieren
+        run: dotnet publish EBVScan.Windows/EBVScan.Windows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EBV-Scan-Windows-1.5.0
+          path: publish/EBV Scan.exe
+          if-no-files-found: error
