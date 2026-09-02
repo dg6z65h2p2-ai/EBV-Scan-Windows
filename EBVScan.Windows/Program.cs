@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Windows.Data.Pdf;
 using Windows.Graphics.Imaging;
+using Windows.Globalization;
 using Windows.Media.Ocr;
 using Windows.Storage;
 using Windows.Storage.Streams;
@@ -90,12 +91,28 @@ class MainForm:Form
     readonly ComboBox material=new(){DropDownStyle=ComboBoxStyle.DropDownList,Width=180};readonly Button open=new(){Text="PDF auswählen",AutoSize=true};readonly Button reset=new(){Text="Nächste Bewertung",AutoSize=true,Enabled=false};readonly Button print=new(){Text="Drucken",AutoSize=true,Enabled=false};
     readonly Label status=new(){AutoSize=true,Text="PDF auswählen oder hier ablegen",Padding=new(8)};readonly Label result=new(){AutoSize=true,Font=new Font("Segoe UI",12,FontStyle.Bold),Padding=new(8)};readonly DataGridView grid=new(){Dock=DockStyle.Fill,AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill,AllowUserToAddRows=false,ReadOnly=true};
     List<Reading> readings=new();string fileName="";
-    public MainForm(){Text="EBV Scan 1.5.0";Width=1180;Height=760;AllowDrop=true;material.Items.AddRange(EBVData.Tables.Keys.ToArray());material.SelectedItem="Boden";
+    public MainForm(){Text="EBV Scan 1.5.1";Width=1180;Height=760;AllowDrop=true;material.Items.AddRange(EBVData.Tables.Keys.ToArray());material.SelectedItem="Boden";
         var top=new FlowLayoutPanel{Dock=DockStyle.Top,Height=52,Padding=new(8)};top.Controls.AddRange(new Control[]{new Label{Text="Material:",AutoSize=true,Padding=new(4,8,0,0)},material,open,reset,print,status});Controls.Add(grid);Controls.Add(result);result.Dock=DockStyle.Top;Controls.Add(top);
         open.Click+=async(_,_)=>{using var d=new OpenFileDialog{Filter="PDF-Dateien|*.pdf"};if(d.ShowDialog()==DialogResult.OK)await LoadPdf(d.FileName);};reset.Click+=(_,_)=>ResetEvaluation();print.Click+=(_,_)=>PrintReport();material.SelectedIndexChanged+=(_,_)=>{if(readings.Count>0)RefreshGrid();};DragEnter+=(_,e)=>{if(e.Data?.GetDataPresent(DataFormats.FileDrop)==true)e.Effect=DragDropEffects.Copy;};DragDrop+=async(_,e)=>{if(e.Data?.GetData(DataFormats.FileDrop) is string[] f&&f.Length>0&&Path.GetExtension(f[0]).Equals(".pdf",StringComparison.OrdinalIgnoreCase))await LoadPdf(f[0]);};
     }
     async Task LoadPdf(string path){try{UseWaitCursor=true;status.Text="PDF wird mit Windows OCR gelesen …";var text=await OcrPdf(path);fileName=Path.GetFileName(path);var lower=text.ToLowerInvariant();if(lower.Contains("gleisschotter")||lower.Contains("gs-"))material.SelectedItem="Gleisschotter";else if(lower.Contains("bauschutt")||lower.Contains("recycling")||lower.Contains("rc-"))material.SelectedItem="Bauschutt";else if(lower.Contains("boden"))material.SelectedItem="Boden";readings=Analyzer.Parse(text,EBVData.Tables[(string)material.SelectedItem!]);status.Text=$"{readings.Count} Messwerte erkannt · {fileName}";reset.Enabled=print.Enabled=true;RefreshGrid();}catch(Exception ex){MessageBox.Show(ex.Message,"PDF konnte nicht gelesen werden",MessageBoxButtons.OK,MessageBoxIcon.Error);}finally{UseWaitCursor=false;}}
-    static async Task<string> OcrPdf(string path){var file=await StorageFile.GetFileFromPathAsync(path);var pdf=await PdfDocument.LoadFromFileAsync(file);var engine=OcrEngine.TryCreateFromUserProfileLanguages()??throw new InvalidOperationException("Windows OCR ist nicht verfügbar.");var sb=new StringBuilder();for(uint i=0;i<pdf.PageCount;i++){using var page=pdf.GetPage(i);using var stream=new InMemoryRandomAccessStream();await page.RenderToStreamAsync(stream,new PdfPageRenderOptions{DestinationWidth=2400});var decoder=await BitmapDecoder.CreateAsync(stream);var bitmap=await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8,BitmapAlphaMode.Premultiplied);var r=await engine.RecognizeAsync(bitmap);sb.AppendLine(r.Text);}return sb.ToString();}
+    static async Task<string> OcrPdf(string path){
+        var file=await StorageFile.GetFileFromPathAsync(path);var pdf=await PdfDocument.LoadFromFileAsync(file);
+        var german=new Language("de-DE");var engine=OcrEngine.IsLanguageSupported(german)?OcrEngine.TryCreateFromLanguage(german):OcrEngine.TryCreateFromUserProfileLanguages();
+        engine??=OcrEngine.TryCreateFromUserProfileLanguages();if(engine is null)throw new InvalidOperationException("Windows OCR ist nicht verfügbar. Bitte das deutsche Sprachpaket in Windows installieren.");
+        var sb=new StringBuilder();
+        for(uint i=0;i<pdf.PageCount;i++){
+            using var page=pdf.GetPage(i);using var stream=new InMemoryRandomAccessStream();
+            await page.RenderToStreamAsync(stream,new PdfPageRenderOptions{DestinationWidth=3000});
+            var decoder=await BitmapDecoder.CreateAsync(stream);using var bitmap=await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8,BitmapAlphaMode.Premultiplied);var result=await engine.RecognizeAsync(bitmap);
+            var words=result.Lines.SelectMany(line=>line.Words).Select(word=>(Text:word.Text,X:word.BoundingRect.X,Y:word.BoundingRect.Y+word.BoundingRect.Height/2,H:word.BoundingRect.Height)).OrderBy(word=>word.Y).ThenBy(word=>word.X).ToList();
+            var rows=new List<List<(string Text,double X,double Y,double H)>>();
+            foreach(var word in words){var row=rows.FirstOrDefault(candidate=>Math.Abs(candidate.Average(item=>item.Y)-word.Y)<=Math.Max(16,word.H*.65));if(row is null){row=new();rows.Add(row);}row.Add(word);}
+            foreach(var row in rows.OrderBy(candidate=>candidate.Average(item=>item.Y)))sb.AppendLine(string.Join("  ",row.OrderBy(item=>item.X).Select(item=>item.Text)));
+            sb.AppendLine();
+        }
+        if(string.IsNullOrWhiteSpace(sb.ToString()))throw new InvalidOperationException("Die PDF-Seiten konnten nicht per OCR gelesen werden.");return sb.ToString();
+    }
     void RefreshGrid(){var t=EBVData.Tables[(string)material.SelectedItem!];grid.Columns.Clear();grid.Rows.Clear();foreach(var c in new[]{"Parameter","MP 1","Klasse MP 1","MP 2","Klasse MP 2"}.Concat(t.Classes))grid.Columns.Add(c,c);foreach(var r in readings){var row=new List<string>{r.Name+(r.Unit.Length>0?" ["+r.Unit+"]":""),r.Texts[0],r.Name is "pH-Wert" or "Elektrische Leitfähigkeit"?"Orientierung":Analyzer.Stage(r,0,t),r.Texts[1],r.Name is "pH-Wert" or "Elektrische Leitfähigkeit"?"Orientierung":Analyzer.Stage(r,1,t)};row.AddRange(t.Classes.Select((_,i)=>t.Limits.First(x=>x.Name==r.Name&&x.Unit==r.Unit).Values[i]?.ToString("0.###",CultureInfo.GetCultureInfo("de-DE"))??"–"));grid.Rows.Add(row.ToArray());}result.Text=$"MP 1: {Analyzer.Overall(readings,0,t)}     MP 2: {Analyzer.Overall(readings,1,t)}";}
     void ResetEvaluation(){readings.Clear();fileName="";grid.Columns.Clear();grid.Rows.Clear();result.Text="";status.Text="PDF auswählen oder hier ablegen";reset.Enabled=print.Enabled=false;}
     void PrintReport(){var doc=new PrintDocument{DocumentName="EBV Analyse"};doc.DefaultPageSettings.Landscape=true;doc.PrintPage+=(_,e)=>{var t=EBVData.Tables[(string)material.SelectedItem!];float y=40;e.Graphics!.DrawString("EBV Analyse – "+t.Title,new Font("Segoe UI",18,FontStyle.Bold),Brushes.Black,40,y);y+=38;e.Graphics.DrawString(fileName+"\nMP 1: "+Analyzer.Overall(readings,0,t)+"   MP 2: "+Analyzer.Overall(readings,1,t),new Font("Segoe UI",10),Brushes.Black,40,y);y+=48;foreach(var r in readings){e.Graphics.DrawString($"{r.Name} [{r.Unit}]   {r.Texts[0]} ({Analyzer.Stage(r,0,t)})   {r.Texts[1]} ({Analyzer.Stage(r,1,t)})",new Font("Segoe UI",8),Brushes.Black,40,y);y+=17;if(y>e.MarginBounds.Bottom){e.HasMorePages=true;return;}}};using var dlg=new PrintDialog{Document=doc};if(dlg.ShowDialog()==DialogResult.OK)doc.Print();}
