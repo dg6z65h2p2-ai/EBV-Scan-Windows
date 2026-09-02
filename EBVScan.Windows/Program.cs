@@ -40,7 +40,7 @@ static class EBVData
             new("Dimefuron","µg/l",new double?[]{.2,2.1,17,27}), new("Flazasulfuron","µg/l",new double?[]{.2,2.1,17,27}), new("Flumioxazin","µg/l",new double?[]{.2,2.1,17,27}),
             new("Ethidimuron","µg/l",new double?[]{.2,2.1,17,27}), new("Thiazafluron","µg/l",new double?[]{.2,2.1,17,27}), new("MKW","µg/l",new double?[]{150,160,310,500}), new("PAK 15","µg/l",new double?[]{.3,2.3,42,50})
         }, 4),
-        ["Boden"] = new("Bodenmaterial",new[]{"BM-F0*","BM-F1","BM-F2","BM-F3"}, new(){
+        ["Boden"] = new("Bodenmaterial",new[]{"BM-F0*","BM-F1","BM-F2","BM-F3"}, new List<Limit>{
             new("pH-Wert","",new double?[]{9.5,9.5,9.5,12},5.5), new("Elektrische Leitfähigkeit","µS/cm",new double?[]{350,500,500,2000}), new("Sulfat","mg/l",new double?[]{250,450,450,1000}),
             new("Arsen","mg/kg",new double?[]{40,40,40,150}),new("Arsen","µg/l",new double?[]{12,20,85,100}),new("Blei","mg/kg",new double?[]{140,140,140,700}),new("Blei","µg/l",new double?[]{35,90,250,470}),
             new("Cadmium","mg/kg",new double?[]{2,2,2,10}),new("Cadmium","µg/l",new double?[]{3,3,10,15}),new("Chrom gesamt","mg/kg",new double?[]{120,120,120,600}),new("Chrom gesamt","µg/l",new double?[]{15,150,290,530}),
@@ -73,7 +73,7 @@ static class Analyzer
             if(matches.Count==0)continue;var line=raw;if(!Regex.IsMatch(line,@"<\s*BG",RegexOptions.IgnoreCase)&&!Regex.IsMatch(line,@"\d" )&&index+1<lines.Length)line+="  "+lines[index+1];
             string lu=Norm(line).Replace('μ','µ');Limit? selected=matches.FirstOrDefault(l=>l.Unit.Length==0||lu.Contains(Norm(l.Unit))||unit==Norm(l.Unit)||(unit=="mg/l"&&l.Unit=="µg/l")||(unit=="µg/l"&&l.Unit=="mg/l"));
             selected??=matches.FirstOrDefault(l=>section=="Feststoff"?(l.Unit.Contains("/kg")||l.Unit=="M%"):!(l.Unit.Contains("/kg")||l.Unit=="M%"));if(selected is null)continue;
-            string scrub=line;foreach(var key in Aliases.TryGetValue(selected.Name,out var aa)?aa:new[]{selected.Name})scrub=Regex.Replace(scrub,Regex.Escape(key),"",RegexOptions.IgnoreCase);
+            string scrub=line;foreach(var parameterAlias in Aliases.TryGetValue(selected.Name,out var aa)?aa:new[]{selected.Name})scrub=Regex.Replace(scrub,Regex.Escape(parameterAlias),"",RegexOptions.IgnoreCase);
             scrub=Regex.Replace(scrub,@"(?i)(PAK\s*1[56]|C10\s*-\s*C4[02]|mg\s*/\s*kg(?:\s*Ts\.?)?|[µμu]g\s*/\s*l|mg\s*/\s*l|[µμ]S\s*/\s*cm|\[\s*25\s*°?C\s*\]|°C)","");
             var tokens=Regex.Matches(scrub,@"(?i)<\s*BG|[-+]?\d+(?:[.,]\d+)?").Select(m=>m.Value).Take(2).ToArray();if(tokens.Length==0)continue;
             var texts=new[]{"–","–"};var values=new double?[2];var ignored=new bool[2];double factor=unit=="mg/l"&&selected.Unit=="µg/l"?1000:unit=="µg/l"&&selected.Unit=="mg/l"?.001:1;
