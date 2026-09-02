@@ -8,6 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>EBV Scan</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.5.2</Version>
+    <ApplicationIcon>AppIcon.ico</ApplicationIcon>
+    <Version>1.5.3</Version>
   </PropertyGroup>
 </Project>
