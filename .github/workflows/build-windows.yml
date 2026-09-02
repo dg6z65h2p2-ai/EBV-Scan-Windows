@@ -20,10 +20,15 @@ jobs:
           name: EBV-Scan-Windows-1.5.0
           path: publish/EBV Scan.exe
           if-no-files-found: error
+      - name: ZIP-Datei für den Browser erstellen
+        shell: pwsh
+        run: Compress-Archive -LiteralPath "publish/EBV Scan.exe" -DestinationPath "publish/EBV-Scan-Windows-1.5.0.zip" -Force
       - name: Öffentlichen Download veröffentlichen
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.5.0
           name: EBV Scan Windows 1.5.0
           body: Selbständige 64-Bit-Windows-Version mit PDF-OCR und EBV-Auswertung. Keine zusätzliche .NET-Installation erforderlich.
-          files: publish/EBV Scan.exe
+          files: |
+            publish/EBV Scan.exe
+            publish/EBV-Scan-Windows-1.5.0.zip
